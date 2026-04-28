@@ -48,4 +48,4 @@ $body = @"
 $($systemStats | ConvertTo-Html -Fragment)
 "@
 
-ConvertTo-Html -Head $style -Body $body | Out-File "C:\Users\jackm\HWX\HealthReport.html"
+Converto-Html -Head $style -Body $body | Out-File "C:\Users\jackm\HWX\HealthReport.html"
