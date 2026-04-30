@@ -16,6 +16,11 @@ $freeDisk = $disk.FreeSpace
 $usedDisk = $totalDisk - $freeDisk
 $diskUsage = [math]::Round(($usedDisk / $totalDisk) * 100, 2)
 
+
+Write-Host "CPU Usage: $cpuUsage%"
+Write-Host "Memory Usage: $memUsage%"
+Write-Host "Disk Usage (C: drive): $diskUsage%"
+=======
 #couldn't do write-host as it only shows in console, not report, so I wrapped the values
 
 #create structured object from calculated values
@@ -25,6 +30,26 @@ $systemStats = [PSCustomObject]@{
 	Disk_Usage_Percent = "$diskUsage%"
 
 #Start doing 2nd part of script here
+# Get all services
+$services = Get-Service
+
+Write-Host "=== Service Status Report ===`n"
+
+foreach ($svc in $services) {
+
+    # Get startup type
+    $startup = (Get-CimInstance Win32_Service -Filter "Name='$($svc.Name)'").StartMode
+
+    # Check for services that should be running but are stopped
+    if ($startup -eq "Auto" -and $svc.Status -ne "Running") {
+        Write-Host "WARNING: $($svc.Name) is STOPPED but set to AUTO start" -ForegroundColor Red
+    }
+    else {
+        Write-Host "$($svc.Name) is $($svc.Status)"
+    }
+}
+
+Write-Host "`n=== Check Complete ==="
 
 #This is the start of the fourth part
 }
@@ -49,3 +74,4 @@ $($systemStats | ConvertTo-Html -Fragment)
 "@
 
 Converto-Html -Head $style -Body $body | Out-File "C:\Users\jackm\HWX\HealthReport.html"
+
