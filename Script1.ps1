@@ -51,6 +51,34 @@ foreach ($svc in $services) {
 
 Write-Host "`n=== Check Complete ==="
 
+#Part 3 starts here
+
+# Define time range (last 24 hours)
+$startTime = (Get-Date).AddHours(-24)
+
+# Get critical and error events from System and Application logs
+$events = Get-WinEvent -FilterHashtable @{
+    LogName = @("System", "Application")
+    Level   = 1,2   # 1 = Critical, 2 = Error
+    StartTime = $startTime
+}
+
+# Check if any events were found
+if ($events) {
+    Write-Host "Critical/Error events found in the last 24 hours:" -ForegroundColor Red
+    
+    foreach ($event in $events) {
+        Write-Host "-----------------------------"
+        Write-Host "Time: $($event.TimeCreated)"
+        Write-Host "Log: $($event.LogName)"
+        Write-Host "ID: $($event.Id)"
+        Write-Host "Level: $($event.LevelDisplayName)"
+        Write-Host "Message: $($event.Message)"
+    }
+} else {
+    Write-Host "No critical or error events found in the last 24 hours." -ForegroundColor Green
+}
+
 #This is the start of the fourth part
 }
 #CSS for better view
