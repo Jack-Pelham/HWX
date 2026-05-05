@@ -2,6 +2,12 @@
 Title: PC Health Checker 
 -by: Jack Pelham & Anthony Spivey
 
+Description:
+-Checks CPU, memory, and disk usage
+-Lists running services and flags any that are stopped unexpectedly
+-Scans Windows Event Log for critical errors within the past 24 hours
+-Generates a HTML report which opens automatically with the results
+
 Usage Instructions: 
 1. Download the script
 2. Navigate to where it is saved
