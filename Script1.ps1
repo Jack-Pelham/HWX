@@ -1,105 +1,121 @@
-#CPU 
+# PART 1: SYSTEM USAGE
+
+# CPU Usage
 $cpu = Get-Counter '\Processor(_Total)\% Processor Time'
 $cpuUsage = [math]::Round($cpu.CounterSamples.CookedValue, 2)
 
-#Memory Usage
-$os = Get-CimInstance win32_OperatingSystem
+# Memory Usage
+$os = Get-CimInstance Win32_OperatingSystem
 $totalMem = $os.TotalVisibleMemorySize
 $freeMem = $os.FreePhysicalMemory
 $usedMem = $totalMem - $freeMem
 $memUsage = [math]::Round(($usedMem / $totalMem) * 100, 2)
 
-#Disk Usage (C: Drive)
+# Disk Usage (C:)
 $disk = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"
 $totalDisk = $disk.Size
 $freeDisk = $disk.FreeSpace
 $usedDisk = $totalDisk - $freeDisk
 $diskUsage = [math]::Round(($usedDisk / $totalDisk) * 100, 2)
 
-
-Write-Host "CPU Usage: $cpuUsage%"
-Write-Host "Memory Usage: $memUsage%"
-Write-Host "Disk Usage (C: drive): $diskUsage%"
-=======
-#couldn't do write-host as it only shows in console, not report, so I wrapped the values
-
-#create structured object from calculated values
+# Create object for report
 $systemStats = [PSCustomObject]@{
-	CPU_Usage_Percent = "$cpuUsage%"
-	Memory_Usage_Percent = "$memUsage%"
-	Disk_Usage_Percent = "$diskUsage%"
+    CPU_Usage_Percent    = "$cpuUsage%"
+    Memory_Usage_Percent = "$memUsage%"
+    Disk_Usage_Percent   = "$diskUsage%"
+}
 
-#Start doing 2nd part of script here
-# Get all services
+# PART 2: SERVICE STATUS (OPTIMIZED)
+
+# Get all services once
 $services = Get-Service
+$cimServices = Get-CimInstance Win32_Service
 
-Write-Host "=== Service Status Report ===`n"
+# Create a lookup table for fast matching
+$cimLookup = @{}
+foreach ($cim in $cimServices) {
+    $cimLookup[$cim.Name] = $cim.StartMode
+}
 
-foreach ($svc in $services) {
+$serviceReport = foreach ($svc in $services) {
+    $startup = $cimLookup[$svc.Name]
 
-    # Get startup type
-    $startup = (Get-CimInstance Win32_Service -Filter "Name='$($svc.Name)'").StartMode
-
-    # Check for services that should be running but are stopped
-    if ($startup -eq "Auto" -and $svc.Status -ne "Running") {
-        Write-Host "WARNING: $($svc.Name) is STOPPED but set to AUTO start" -ForegroundColor Red
-    }
-    else {
-        Write-Host "$($svc.Name) is $($svc.Status)"
+    [PSCustomObject]@{
+        ServiceName = $svc.Name
+        Status      = $svc.Status
+        StartupType = $startup
+        Warning     = if ($startup -eq "Auto" -and $svc.Status -ne "Running") {
+            "WARNING: Should be running"
+        } else {
+            ""
+        }
     }
 }
 
-Write-Host "`n=== Check Complete ==="
+# PART 3: EVENT LOG CHECK (OPTIMIZED)
 
-#Part 3 starts here
-
-# Define time range (last 24 hours)
 $startTime = (Get-Date).AddHours(-24)
 
-# Get critical and error events from System and Application logs
 $events = Get-WinEvent -FilterHashtable @{
-    LogName = @("System", "Application")
-    Level   = 1,2   # 1 = Critical, 2 = Error
+    LogName   = @("System", "Application")
+    Level     = 1,2   # Critical & Error
     StartTime = $startTime
-}
+} -MaxEvents 50 -ErrorAction SilentlyContinue
 
-# Check if any events were found
-if ($events) {
-    Write-Host "Critical/Error events found in the last 24 hours:" -ForegroundColor Red
-    
+$eventReport = if ($events) {
     foreach ($event in $events) {
-        Write-Host "-----------------------------"
-        Write-Host "Time: $($event.TimeCreated)"
-        Write-Host "Log: $($event.LogName)"
-        Write-Host "ID: $($event.Id)"
-        Write-Host "Level: $($event.LevelDisplayName)"
-        Write-Host "Message: $($event.Message)"
+        [PSCustomObject]@{
+            Time    = $event.TimeCreated
+            Log     = $event.LogName
+            ID      = $event.Id
+            Level   = $event.LevelDisplayName
+            Message = ($event.Message -replace "`r`n", " ")
+        }
     }
 } else {
-    Write-Host "No critical or error events found in the last 24 hours." -ForegroundColor Green
+    [PSCustomObject]@{
+        Time    = "N/A"
+        Log     = "N/A"
+        ID      = "N/A"
+        Level   = "Info"
+        Message = "No critical or error events in the last 24 hours"
+    }
 }
 
-#This is the start of the fourth part
-}
-#CSS for better view
+# HTML STYLE
+
 $style = @"
 <style>
 body { font-family: Arial; }
-h1 { color: #2E8C1; }
-table { border-collapse: collapse; width: 50%; }
-th, td { border: 1px solid black; padding: 8px; text-allign: left; }
-th { background-color: #f2f2f2; } 
+h1 { color: #2E8C1F; }
+table { border-collapse: collapse; width: 80%; margin-bottom: 20px; }
+th, td { border: 1px solid black; padding: 8px; text-align: left; }
+th { background-color: #f2f2f2; }
 </style>
 "@
 
-#HTML Body
+# HTML BODY
+
 $body = @"
 <h1>PC Health Report</h1>
 <p>Generated: $(Get-Date)</p>
 
 <h2>System Usage Summary</h2>
 $($systemStats | ConvertTo-Html -Fragment)
+
+<h2>Service Status Report</h2>
+$($serviceReport | ConvertTo-Html -Fragment)
+
+<h2>Critical/Error Events (Last 24 Hours)</h2>
+$($eventReport | ConvertTo-Html -Fragment)
 "@
 
-Converto-Html -Head $style -Body $body | Out-File "C:\Users\jackm\HWX\HealthReport.html"
+# EXPORT REPORT
 
+$outputPath = "C:\Users\jackm\Desktop\HealthReport.html"
+
+ConvertTo-Html -Head $style -Body $body |
+Out-File $outputPath
+
+# Auto-open report
+Start-Process $outputPath
